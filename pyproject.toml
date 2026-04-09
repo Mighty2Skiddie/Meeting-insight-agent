@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meeting-insight-agent"
+version = "1.0.0"
+description = "AI-powered meeting analysis with structured insights"
+requires-python = ">=3.12"
+dependencies = [
+    # Core Framework
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.32.1",
+    "gunicorn==23.0.0",
+
+    # Validation & Config
+    "pydantic==2.10.4",
+    "pydantic-settings==2.7.0",
+    "python-multipart==0.0.19",
+
+    # HTTP Client
+    "httpx==0.28.1",
+
+    # AI Providers
+    "openai==1.68.2",
+    "groq==0.13.1",
+    "google-generativeai==0.8.4",
+
+    # Audio Processing — FFmpeg is called directly via subprocess (must be on PATH)
+
+    # Database
+    "sqlalchemy==2.0.36",
+    "aiosqlite==0.20.0",
+    "alembic==1.14.0",
+
+    # Observability
+    "structlog==24.4.0",
+    "prometheus-fastapi-instrumentator==7.0.0",
+    "opentelemetry-api==1.29.0",
+    "opentelemetry-sdk==1.29.0",
+    "opentelemetry-instrumentation-fastapi==0.50b0",
+    "opentelemetry-exporter-otlp-proto-grpc==1.29.0",
+
+    # Resilience
+    "tenacity==9.0.0",
+
+    # Rate Limiting & Middleware
+    "slowapi==0.1.9",
+    "asgi-correlation-id==4.3.4",
+
+    # Utilities
+    "python-magic==0.4.27",
+    "aiofiles==24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.0",
+    "pytest-cov==6.0.0",
+    "httpx==0.28.1",
+    "ruff==0.9.1",
+    "mypy==1.13.0",
+    "fakeredis==2.26.2",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+select = ["E", "F", "I", "N", "W", "UP", "B", "ANN"]
+ignore = ["ANN101", "ANN102", "ANN401"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning:google.*:",
+    "ignore::DeprecationWarning:opentelemetry.*:",
+    "ignore::DeprecationWarning:pkg_resources.*:",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pyright]
+venvPath = "."
+venv = "myvenv"
+pythonVersion = "3.12"
+extraPaths = ["."]

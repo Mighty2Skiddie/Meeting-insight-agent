@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: meeting-insight-agent
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BUDGET_LIMIT_USD
+        value: "2.00"
+      - key: BUDGET_RESERVE_USD
+        value: "0.20"
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/meetings.db
+      - key: UPLOAD_DIR
+        value: ./data/uploads
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "100"
+    healthCheckPath: /health
+    disk:
+      name: meeting-data
+      mountPath: /app/data
+      sizeGB: 1
