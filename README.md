@@ -2,7 +2,19 @@
 
 > **AI-powered meeting analysis** — transcription, structured insights, action items, and productivity evaluation. OpenAI-first with intelligent 4-tier fallback chains.
 
-[![CI](https://github.com/your-org/meeting-insight-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/meeting-insight-agent/actions)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat&logo=fastapi&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-Whisper%20%2B%20GPT--4o-412991?style=flat&logo=openai&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-Whisper%20v3%20%2B%20LLaMA%203.3-F55036?style=flat&logo=groq&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google-Gemini%20Flash%202.0-4285F4?style=flat&logo=google&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57?style=flat&logo=sqlite&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0%20Async-D71F00?style=flat&logo=sqlalchemy&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-Metrics-E6522C?style=flat&logo=prometheus&logoColor=white)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Tracing-425CC7?style=flat&logo=opentelemetry&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Multi--stage%20Build-2496ED?style=flat&logo=docker&logoColor=white)
+![Render](https://img.shields.io/badge/Render-Deploy%20Ready-46E3B7?style=flat&logo=render&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow?style=flat)
+
 
 ---
 
@@ -367,10 +379,3 @@ ruff check src/ tests/
 
 ---
 
-## Deployment (Render)
-
-1. Push to GitHub
-2. Create new Render service → "Deploy from GitHub" → select repo
-3. Render auto-detects `render.yaml`
-4. Add secret env vars in Render dashboard: `OPENAI_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`
-5. Deploy — Swagger UI available at `https://your-service.onrender.com/docs`
