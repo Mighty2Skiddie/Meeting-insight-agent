@@ -62,12 +62,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 EXPOSE 8000
 
-# Use Gunicorn with Uvicorn workers for production
-CMD ["gunicorn", "src.main:app", \
+# python -m uvicorn guarantees CWD (/app) is in sys.path — no import issues
+CMD ["python", "-m", "uvicorn", "src.main:app", \
+    "--host", "0.0.0.0", \
+    "--port", "8000", \
     "--workers", "2", \
-    "--worker-class", "uvicorn.workers.UvicornWorker", \
-    "--bind", "0.0.0.0:8000", \
-    "--timeout", "120", \
-    "--graceful-timeout", "30", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-"]
+    "--timeout-keep-alive", "120"]
