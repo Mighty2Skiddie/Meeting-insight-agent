@@ -45,6 +45,9 @@ COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini .
 
+# Ensure Python can resolve 'src.*' imports from /app
+ENV PYTHONPATH=/app
+
 # Create data directories with correct permissions
 RUN mkdir -p /app/data/uploads /app/data/db /tmp/uploads && \
     useradd --system --no-create-home --shell /bin/false appuser && \
