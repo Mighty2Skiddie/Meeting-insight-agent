@@ -4,7 +4,6 @@ All values are read from environment variables / .env file.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -91,7 +90,12 @@ class Settings(BaseSettings):
         return bool(self.gemini_api_key)
 
 
-@lru_cache(maxsize=1)
+_settings: Settings | None = None
+
+
 def get_settings() -> Settings:
-    """Return cached settings singleton."""
-    return Settings()
+    """Return cached settings singleton. Re-reads on first call per process."""
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
