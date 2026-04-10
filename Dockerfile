@@ -30,9 +30,10 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-# FFmpeg is required for audio processing
+# FFmpeg for audio processing, libmagic1 for python-magic MIME detection
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder

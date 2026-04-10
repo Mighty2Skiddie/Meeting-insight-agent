@@ -26,7 +26,3 @@ services:
       - key: MAX_UPLOAD_SIZE_MB
         value: "100"
     healthCheckPath: /health
-    disk:
-      name: meeting-data
-      mountPath: /app/data
-      sizeGB: 1
