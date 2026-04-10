@@ -4,15 +4,20 @@ Pydantic v2 schemas — single source of truth for:
   2. OpenAI GPT-4o-mini structured output JSON schema
   3. Test assertion shapes
 
-LLM-facing models use `extra="ignore"` + sensible defaults so that
-minor schema deviations from Groq/Gemini/GPT don't crash validation.
+LLM-facing models use `extra="ignore"` + sensible defaults + field
+validators so that Groq/Gemini output quirks don't crash validation.
+Common LLM quirks handled:
+  - confidence returned as percentage (85) instead of fraction (0.85)
+  - action_items returned as list of strings instead of objects
+  - action_items missing required fields like "task"
+  - key_decisions returned as list of dicts instead of strings
 """
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # --- Transcript ---
 
@@ -40,7 +45,7 @@ class TranscriptData(BaseModel):
 class ActionItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    task: str = Field(description="Clear, actionable task description")
+    task: str = Field(default="", description="Clear, actionable task description")
     owner: str = Field(default="Unknown", description="Speaker identifier or 'Unknown'")
     priority: str = Field(default="medium", description="high | medium | low")
     deadline_mentioned: str | None = Field(
@@ -51,14 +56,23 @@ class ActionItem(BaseModel):
 class DiscussionTopic(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    topic: str = Field(description="Name of the discussion topic")
+    topic: str = Field(default="", description="Name of the discussion topic")
     time_spent_percent: int = Field(
         default=0,
         description="Estimated percentage of meeting time spent on this topic",
-        ge=0,
-        le=100,
     )
     resolution: str = Field(default="ongoing", description="resolved | ongoing | deferred")
+
+    @field_validator("time_spent_percent", mode="before")
+    @classmethod
+    def coerce_time_percent(cls, v: object) -> int:
+        """Groq sometimes returns null for time_spent_percent."""
+        if v is None:
+            return 0
+        try:
+            return max(0, min(100, int(float(v))))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0
 
 
 class ProductivityAssessment(BaseModel):
@@ -69,13 +83,35 @@ class ProductivityAssessment(BaseModel):
         default="Unable to assess productivity.",
         description="2-3 sentence justification for the score",
     )
-    confidence: float = Field(
-        default=0.5, description="Confidence score 0.0-1.0", ge=0.0, le=1.0
-    )
+    confidence: float = Field(default=0.5, description="Confidence score 0.0-1.0")
     improvement_suggestions: list[str] = Field(
         default_factory=list,
         description="Actionable suggestions to improve future meetings",
     )
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def clamp_confidence(cls, v: object) -> float:
+        """LLMs sometimes return confidence as a percentage (85) not a fraction (0.85)."""
+        try:
+            f = float(v)  # type: ignore[arg-type]
+            if f > 1.0:
+                f = f / 100.0   # normalize 85 → 0.85
+            return max(0.0, min(1.0, f))
+        except (TypeError, ValueError):
+            return 0.5
+
+    @field_validator("improvement_suggestions", mode="before")
+    @classmethod
+    def ensure_suggestions_list(cls, v: object) -> list[str]:
+        """Tolerate a single string, Python None, or the string 'None' instead of a list.
+        Groq sometimes literally returns the string 'None' instead of [] or null.
+        """
+        if v is None or v == "None" or v == "none":
+            return []
+        if isinstance(v, str):
+            return [v]  # single suggestion string — wrap it
+        return list(v)  # type: ignore[arg-type]
 
 
 class MeetingInsights(BaseModel):
@@ -84,7 +120,8 @@ class MeetingInsights(BaseModel):
     to GPT-4o-mini as the response_format JSON schema.
     Pydantic model IS the contract — no drift possible.
 
-    extra="ignore" ensures minor LLM output deviations don't crash.
+    extra="ignore" + field validators ensure Groq/Gemini output quirks
+    are normalized rather than crashing validation.
     """
     model_config = ConfigDict(extra="ignore")
 
@@ -111,6 +148,65 @@ class MeetingInsights(BaseModel):
         default=False,
         description="Whether a follow-up meeting is recommended",
     )
+
+    @field_validator("key_decisions", mode="before")
+    @classmethod
+    def normalize_key_decisions(cls, v: object) -> list[str]:
+        """Some LLMs return decisions as dicts instead of strings."""
+        if v is None:
+            return []
+        result = []
+        for item in v:  # type: ignore[union-attr]
+            if isinstance(item, dict):
+                # Extract from common dict shapes: {"decision": "..."} or {"text": "..."}
+                result.append(str(
+                    item.get("decision") or item.get("text") or item.get("description") or str(item)
+                ))
+            else:
+                result.append(str(item))
+        return result
+
+    @field_validator("action_items", mode="before")
+    @classmethod
+    def normalize_action_items(cls, v: object) -> list[dict[str, object]]:
+        """LLMs sometimes return action_items as strings, or dicts missing 'task'."""
+        if v is None:
+            return []
+        result = []
+        for item in v:  # type: ignore[union-attr]
+            if isinstance(item, str):
+                result.append({"task": item, "owner": "Unknown", "priority": "medium"})
+            elif isinstance(item, dict):
+                if "task" not in item or not item["task"]:
+                    # Try to find the task text from alternative field names
+                    item["task"] = (
+                        item.get("action") or item.get("description")
+                        or item.get("item") or "(no task text)"
+                    )
+                result.append(item)
+        return result
+
+    @field_validator("discussion_topics", mode="before")
+    @classmethod
+    def normalize_discussion_topics(cls, v: object) -> list[dict[str, object]]:
+        """Tolerate discussion_topics as list of strings."""
+        if v is None:
+            return []
+        result = []
+        for item in v:  # type: ignore[union-attr]
+            if isinstance(item, str):
+                result.append({"topic": item, "time_spent_percent": 0, "resolution": "ongoing"})
+            else:
+                result.append(item)
+        return result
+
+    @field_validator("productivity", mode="before")
+    @classmethod
+    def normalize_productivity(cls, v: object) -> object:
+        """Tolerate productivity returned as a string ('Productive') instead of object."""
+        if isinstance(v, str):
+            return {"score": v, "reasoning": "", "confidence": 0.5}
+        return v
 
 
 # --- Request / Response ---

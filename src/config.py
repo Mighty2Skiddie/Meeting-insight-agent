@@ -1,6 +1,6 @@
 """
 Centralized application configuration using Pydantic Settings.
-All values are read from environment variables / .env file.
+All values are read from environment variables / .env file
 """
 from __future__ import annotations
 
