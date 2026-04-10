@@ -22,10 +22,10 @@
 
 | Resource | URL |
 |:---------|:----|
-| **API Base** | `https://your-service.onrender.com/api/v1` |
-| **Swagger UI** | `https://your-service.onrender.com/docs` |
-| **ReDoc** | `https://your-service.onrender.com/redoc` |
-| **Health** | `https://your-service.onrender.com/health` |
+| **API Base** | `https://meeting-insight-agent.onrender.com/api/v1` |
+| **Swagger UI** | `https://meeting-insight-agent.onrender.com/docs` |
+| **ReDoc** | `https://meeting-insight-agent.onrender.com/redoc` |
+| **Health** | `https://meeting-insight-agent.onrender.com/health` |
 
 ---
 
@@ -192,7 +192,7 @@ sequenceDiagram
 
 ```bash
 # 1. Clone
-git clone https://github.com/your-org/meeting-insight-agent
+git clone https://github.com/Mighty2Skiddie/Meeting-insight-agent
 cd meeting-insight-agent
 
 # 2. Copy env file and fill in your API keys
