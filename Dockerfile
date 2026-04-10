@@ -46,9 +46,10 @@ COPY alembic/ ./alembic/
 COPY alembic.ini .
 
 # Create data directories with correct permissions
-RUN mkdir -p data/uploads data/db && \
+RUN mkdir -p /app/data/uploads /app/data/db /tmp/uploads && \
     useradd --system --no-create-home --shell /bin/false appuser && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    chmod -R 777 /tmp
 
 USER appuser
 

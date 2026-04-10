@@ -20,9 +20,9 @@ services:
       - key: BUDGET_RESERVE_USD
         value: "0.20"
       - key: DATABASE_URL
-        value: sqlite+aiosqlite:///./data/meetings.db
+        value: sqlite+aiosqlite:////tmp/meetings.db
       - key: UPLOAD_DIR
-        value: ./data/uploads
+        value: /tmp/uploads
       - key: MAX_UPLOAD_SIZE_MB
         value: "100"
     healthCheckPath: /health
