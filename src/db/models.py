@@ -21,6 +21,12 @@ class MeetingStatus(str, Enum):
     ANALYZING = "ANALYZING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    # Live meeting states
+    LIVE_JOINING = "LIVE_JOINING"
+    LIVE_WAITING = "LIVE_WAITING"          # waiting for host to admit bot
+    LIVE_TRANSCRIBING = "LIVE_TRANSCRIBING"
+    LIVE_ANALYZING = "LIVE_ANALYZING"      # interim analysis in progress
+    LIVE_FINALIZING = "LIVE_FINALIZING"
 
 
 class ProviderTier(str, Enum):
@@ -58,6 +64,12 @@ class Meeting(Base):
     degraded: Mapped[bool] = mapped_column(default=False)
     total_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     processing_time_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Live meeting metadata (null for uploaded recordings)
+    meeting_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_live: Mapped[bool] = mapped_column(default=False)
+    live_caption_count: Mapped[int] = mapped_column(Integer, default=0)
+    live_elapsed_seconds: Mapped[float] = mapped_column(Float, default=0.0)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

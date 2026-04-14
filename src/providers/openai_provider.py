@@ -108,8 +108,51 @@ class OpenAILLMProvider(LLMProvider):
             api_key=settings.openai_api_key,
             http_client=httpx.AsyncClient(timeout=settings.request_timeout_seconds),
         )
-        # Build the JSON schema once from the Pydantic model
-        self._json_schema = MeetingInsights.model_json_schema()
+        # Build the JSON schema from the Pydantic model, then fix for OpenAI
+        raw_schema = MeetingInsights.model_json_schema()
+        self._json_schema = self._fix_schema_for_openai(raw_schema)
+
+    @staticmethod
+    def _fix_schema_for_openai(schema: dict) -> dict:
+        """Recursively add 'additionalProperties': false to all objects.
+
+        OpenAI's structured output API requires this on EVERY object
+        in the JSON schema. Pydantic doesn't include it by default.
+        Also resolves $defs references inline.
+        """
+        import copy
+        schema = copy.deepcopy(schema)
+        defs = schema.pop("$defs", {})
+
+        def _resolve_and_fix(node: dict) -> dict:
+            # Resolve $ref → inline the definition
+            if "$ref" in node:
+                ref_name = node["$ref"].split("/")[-1]
+                if ref_name in defs:
+                    node = copy.deepcopy(defs[ref_name])
+                else:
+                    return node
+
+            # If this is an object type, add additionalProperties: false
+            if node.get("type") == "object" or "properties" in node:
+                node["additionalProperties"] = False
+                # Recurse into properties
+                for prop_name, prop_schema in node.get("properties", {}).items():
+                    node["properties"][prop_name] = _resolve_and_fix(prop_schema)
+
+            # Handle arrays — fix the items schema
+            if node.get("type") == "array" and "items" in node:
+                node["items"] = _resolve_and_fix(node["items"])
+
+            # Handle anyOf / oneOf (Pydantic uses these for Optional fields)
+            for key in ("anyOf", "oneOf"):
+                if key in node:
+                    node[key] = [_resolve_and_fix(opt) for opt in node[key]]
+
+            return node
+
+        schema = _resolve_and_fix(schema)
+        return schema
 
     @property
     def name(self) -> str:
