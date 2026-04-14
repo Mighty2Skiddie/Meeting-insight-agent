@@ -704,98 +704,70 @@ python samples/test_api.py
 
 ---
 
-## Live Meeting Integration — Design Decision & Production Path
+## Phase 2: Live Meeting Integration (Google Meet Bot)
 
-### Why Live Join Is Not Implemented
+This codebase effectively completes **Phase 2** of the assignment objectives, supporting true **Live Google Meet Integration** via an automated web scraping strategy.
 
-The assignment explicitly states the system should support **"at least one of"**: join a live meeting **OR** process a recorded file. This is a deliberate scope qualifier — live meeting bots are a significantly more complex infrastructure problem, not an AI problem.
+> **⚠️ LOCAL EXECUTION ONLY:** The Playwright bot relies on Chrome's `headless=False` configuration targeting Microsoft Edge. Google Meet's anti-bot detection actively prevents standard headless Chromium deployments (like `headless=True`), and skips rendering the live caption DOM elements completely when the page is strictly hidden. Because it requires a physical display/window manager to trick Google Meet into rendering the UI, this live feature is fully functional **locally**, but unsupported out-of-the-box on basic visual-less cloud instances (like Render's free tier) without advanced display server configurations (e.g., `Xvfb`).
 
-Here is the honest engineering reality:
-
-| Platform | Official Bot API? | What It Actually Requires | Infrastructure Cost |
-|:---------|:-----------------|:--------------------------|:--------------------|
-| **Zoom** | ✅ Meeting SDK | Zoom Bot app + Zoom paid business plan ($13.33/mo) + persistent server to run the bot participant | Paid plan required |
-| **Google Meet** | ❌ No public bot API | Headless browser (Puppeteer/Playwright) joins as a human user, captures tab audio via `getDisplayMedia()` | Fragile — breaks on every UI update |
-| **Microsoft Teams** | ⚠️ Partial | Azure AD app registration + Microsoft Graph Communications API + Teams business license | Azure costs + M365 license |
-
-> **The core problem**: Every platform treats bots as a security threat. Getting audio in real-time requires either paying for SDK access, running a headless browser that impersonates a human, or paying an intermediary service like Recall.ai.
-
-### How Production Systems Solve This
-
-Companies like **Fireflies.ai**, **Otter.ai**, and **Notion AI Meetings** all use the same pattern:
+### Live Bot Architecture
 
 ```mermaid
-graph LR
-    subgraph "Live Meeting Platforms"
-        ZM[Zoom]
-        GM[Google Meet]
-        MT[MS Teams]
+graph TD
+    classDef main fill:#2b3a42,stroke:#00d2ff,stroke-width:2px,color:#fff;
+    classDef browser fill:#3f2b42,stroke:#ff00d2,stroke-width:2px,color:#fff;
+    classDef async fill:#2b4233,stroke:#00ff88,stroke-width:2px,color:#fff;
+    
+    subgraph "FastAPI Server Loop"
+        API["POST /api/v1/meetings/live"]:::main
+        SM["SessionManager"]:::main
+        WS["WebSocket Stream"]:::main
+    end
+    
+    subgraph "Playwright Background Thread"
+        PB["Playwright Browser<br/>(headless=False)"]:::browser
+        GC["Google Meet DOM"]:::browser
+        ME["MutationObserver<br/>(Caption Polling)"]:::browser
+    end
+    
+    subgraph "Async Pipeline"
+        BUF["Text Memory Buffer<br/>& Deduplication"]:::async
+        LLM["ProviderRouter<br/>(OpenAI/Groq/Gemini)"]:::async
+        DB["SQLite Storage"]:::async
     end
 
-    subgraph "Bot Infrastructure"
-        HB["Headless Browser<br/>Playwright / Puppeteer<br/>on a GPU server"]
-        AC["Audio Capture<br/>getDisplayMedia() API"]
-        BUF["Audio Buffer<br/>Chunked streaming"]
-    end
-
-    subgraph "Our Pipeline"
-        STT["Whisper STT<br/>streaming chunks"]
-        LLM["GPT-4o-mini<br/>real-time analysis"]
-        API["Meeting Insight API"]
-    end
-
-    ZM -->|"Bot joins as participant"| HB
-    GM -->|"Bot joins via browser"| HB
-    MT -->|"Bot joins via browser"| HB
-    HB --> AC --> BUF --> STT --> LLM --> API
+    API -->|Spawns Thread| PB
+    PB -->|Joins as 'Transcriber'| GC
+    API -->|Creates| SM
+    GC -->|UI Render| ME
+    SM -.->|Registers Callback| ME
+    
+    ME -->|Sends Captions| BUF
+    BUF -->|Streams Text| WS
+    
+    API_STOP["POST /stop-live"]:::main -->|Ends Call| PB
+    API_STOP -->|Triggers Report| LLM
+    BUF -->|Full Transcript| LLM
+    LLM -->|Meeting Insights| DB
 ```
 
-**The stack that makes this work in production:**
-- **Recall.ai** — managed bot SDK ($99/month) — joins any platform, returns audio stream
-- **Playwright** — open source headless browser, self-hosted, brittle
-- **OpenAI Realtime API** (`gpt-4o-realtime-preview`) — streams audio in 100ms chunks, returns live transcript + analysis
+### How To Use It
 
-### Our Architecture Is Ready For It
+You can run the live integration with just a standard Google Meet link. 
 
-This codebase is designed with a **pluggable input adapter pattern**. Adding live meeting support requires implementing exactly one interface:
-
-```python
-# src/inputs/base.py  ← add this file
-class MeetingInputAdapter(ABC):
-    @abstractmethod
-    async def capture_audio(self, meeting_url: str) -> AsyncIterator[bytes]:
-        """Yields audio chunks in real-time from a live meeting."""
-        ...
-
-# src/inputs/recall_adapter.py  ← implement for Recall.ai ($99/mo)
-class RecallMeetingAdapter(MeetingInputAdapter):
-    async def capture_audio(self, meeting_url: str) -> AsyncIterator[bytes]:
-        # 1. POST to Recall.ai API — bot joins the meeting
-        # 2. Recall streams audio back via webhook
-        # 3. Yield chunks to Whisper streaming API
-        ...
-
-# src/inputs/playwright_adapter.py  ← implement for free (brittle)
-class PlaywrightMeetingAdapter(MeetingInputAdapter):
-    async def capture_audio(self, meeting_url: str) -> AsyncIterator[bytes]:
-        # 1. Launch headless Chromium
-        # 2. Join meeting URL as guest
-        # 3. Capture tab audio via CDP (Chrome DevTools Protocol)
-        # 4. Yield audio to Whisper
-        ...
-```
-
-The `MeetingService` would call `adapter.capture_audio(url)` and pipe chunks into the same transcription and analysis pipeline that already exists — **zero changes to the AI or API layer**.
-
-### Why We Chose File Upload For This Assignment
-
-1. **Assignment allows it** — "at least one of" is satisfied by file upload
-2. **Same AI pipeline** — the transcription and analysis quality is identical whether audio comes from a file or a live stream
-3. **No paid infrastructure** — live join requires either a paid bot platform or a persistent VM to run a headless browser
-4. **More robust for evaluation** — a reviewer can upload a sample file and see results instantly; a live bot requires an active meeting
-5. **Production path is clear** — the adapter interface above makes the upgrade path explicit and non-breaking
-
-> In a real product sprint, live join would be a **Phase 2 feature** added after validating the core AI pipeline quality — which is exactly what this implementation does.
+1. **Start a Live Google Meet:** Host a Google Meet and copy the join URL (`https://meet.google.com/xxx-xxxx-xxx`).
+2. **Launch the Local Server:** Ensure your API backend is active.
+   ```bash
+   uvicorn src.main:app --reload --port 8000
+   ```
+3. **Run the Live Test Pipeline:** Open a separate terminal and start the driver script. Include your URL and an optional duration cut-off (e.g., `120` seconds).
+   ```bash
+   python samples/test_live_meeting.py --url https://meet.google.com/xxx-xxxx-xxx --duration 120
+   ```
+4. **Approve the Bot (Crucial Step):** The Microsoft Edge browser will silently launch and prompt for permission. **You must hit "Admit" inside your Google Meet session for the bot to join**.
+5. **Silent Mode & Captions:** Once admitted, the bot instantly mutes its own mic/camera on the pre-join screen to avoid echo, then clicks "Turn on captions."
+6. **Live Streaming:** As people in the meeting talk, the bot polls the DOM, pushing transcript buffers across the webhook directly to your terminal.
+7. **Final AI Insights:** When stopped or timed-out, the bot unloads. The buffered transcript is instantly routed through `ProviderRouter` (checking budget and availability for OpenAI -> Gemini -> Groq -> Rule Based) resulting in the finalized Meeting Insights data.
 
 ---
 
